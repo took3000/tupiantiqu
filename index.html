@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>高级图片管理工具 - 多属性版</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .container { display: flex; gap: 20px; margin-bottom: 20px; }
+    .config-box { background: #f5f5f5; padding: 15px; border-radius: 5px; flex: 1; }
+    textarea { width: 100%; height: 150px; margin: 10px 0; }
+    button { padding: 8px 15px; background: #007bff; color: white; border: none; cursor: pointer; }
+    #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .img-card { border: 2px solid #ddd; padding: 10px; position: relative; cursor: pointer; transition: all 0.2s; }
+    .img-card.selected { border-color: #007bff; box-shadow: 0 0 8px rgba(0,123,255,0.3); }
+    .img-card img { max-width: 100%; height: auto; display: block; }
+    .checkbox { position: absolute; top: 5px; right: 5px; }
+    .size-info { font-size: 12px; color: #666; margin-top: 5px; }
+    .stats { margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+    .stats span { margin-right: 20px; font-weight: bold; }
+    .loading { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    .attr-selector { margin: 10px 0; }
+    .attr-option { margin-right: 15px; }
+    #customAttr { margin-left: 5px; width: 120px; padding: 3px; }
+    #customAttr.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h2>高级图片管理工具</h2>
+  <div class="stats" id="stats">
+    <span>总图片数: 0</span>
+    <span>符合条件: 0</span>
+    <span>当前剩余: 0</span>
+  </div>
+
+  <div class="container">
+    <div class="config-box">
+      <h3>步骤 1：输入HTML内容</h3>
+      <div class="attr-selector">
+        <label class="attr-option">
+          <input type="checkbox" name="attr" value="data-original" checked> data-original
+        </label>
+        <label class="attr-option">
+          <input type="checkbox" name="attr" value="src"> src
+        </label>
+        <label class="attr-option">
+          <input type="checkbox" id="customCheckbox"> 自定义属性：
+          <input type="text" id="customAttr" class="hidden" placeholder="例如: data-src">
+        </label>
+      </div>
+      <textarea placeholder="粘贴完整的HTML内容到这里..."></textarea>
+      <button onclick="loadImages()">解析图片</button>
+    </div>
+    
+    <div class="config-box">
+      <h3>步骤 2：筛选设置</h3>
+      <div>
+        <label>最小宽度: <input type="number" id="minWidth" value="0"></label>
+        <label style="margin-left: 10px;">最小高度: <input type="number" id="minHeight" value="0"></label>
+        <button onclick="applyFilter()" style="margin-left: 10px;">应用筛选</button>
+      </div>
+      
+      <h3 style="margin-top: 15px;">操作</h3>
+      <div>
+        <button onclick="deleteSelected()">删除选中项</button>
+        <button onclick="copyResults()" style="margin-left: 10px;">复制结果</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gallery"></div>
+  <div class="loading" id="loading">加载中...</div>
+
+  <script>
+    let allImages = [];
+    let currentFiltered = [];
+
+    // 自定义属性交互
+    document.getElementById('customCheckbox').addEventListener('change', function() {
+      document.getElementById('customAttr').classList.toggle('hidden', !this.checked);
+    });
+
+    // 获取目标属性列表
+    function getTargetAttributes() {
+      const attributes = [];
+      document.querySelectorAll('input[name="attr"]:checked').forEach(checkbox => {
+        attributes.push(checkbox.value);
+      });
+      if (document.getElementById('customCheckbox').checked) {
+        const customAttr = document.getElementById('customAttr').value.trim();
+        if (customAttr) attributes.push(customAttr);
+      }
+      return attributes;
+    }
+
+    async function loadImages() {
+      const html = document.querySelector('textarea').value;
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      allImages = [];
+      currentFiltered = [];
+      document.getElementById('gallery').innerHTML = '';
+      showLoading(true);
+
+      const targetAttrs = getTargetAttributes();
+      if (targetAttrs.length === 0) {
+        alert('请至少选择一个属性！');
+        showLoading(false);
+        return;
+      }
+
+      const selector = targetAttrs.map(attr => `[${attr}]`).join(',');
+      const elements = doc.querySelectorAll(selector);
+      
+      // 提取所有属性值并去重
+      const links = [];
+      elements.forEach(el => {
+        targetAttrs.forEach(attr => {
+          const url = el.getAttribute(attr);
+          if (url) links.push(url);
+        });
+      });
+      const uniqueLinks = [...new Set(links)];
+
+      // 加载图片信息
+      for (const url of uniqueLinks) {
+        const img = new Image();
+        img.src = url;
+        
+        await new Promise(resolve => {
+          img.onload = () => {
+            allImages.push({
+              url,
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              selected: false
+            });
+            resolve();
+          };
+          img.onerror = () => {
+            allImages.push({
+              url,
+              width: 0,
+              height: 0,
+              selected: false
+            });
+            resolve();
+          };
+          setTimeout(resolve, 3000);
+        });
+      }
+
+      currentFiltered = allImages.slice();
+      applyFilter();
+      showLoading(false);
+    }
+
+    // 其余函数保持不变（renderGallery、applyFilter、toggleSelect等）
+    // ...（保持与之前版本相同的函数实现）
+  </script>
+</body>
+</html>
